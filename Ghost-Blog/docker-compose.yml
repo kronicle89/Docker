@@ -1,0 +1,60 @@
+version: '3'
+services:
+   nginx:
+     image: nginx
+     container_name: nginx-proxy
+     restart: always
+     volumes:
+       - certs:/etc/nginx/certs:ro
+       - nginx_conf.d:/etc/nginx/conf.d
+       - nginx_vhost.d:/etc/nginx/vhost.d
+       - nginx_html:/usr/share/nginx/html
+     labels:
+       - "com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy"
+     ports:
+       - "80:80"
+       - "443:443"
+
+   nginx-gen:
+     image: jwilder/docker-gen
+     restart: always
+     command: -notify-sighup nginx-proxy -watch /etc/docker-gen/templates/nginx.tmpl /etc/nginx/conf.d/default.conf
+     volumes:
+       - ./files/nginx.tmpl:/etc/docker-gen/templates/nginx.tmpl:ro
+       - /var/run/docker.sock:/tmp/docker.sock:ro
+       - certs:/etc/nginx/certs:ro
+       - nginx_conf.d:/etc/nginx/conf.d
+       - nginx_vhost.d:/etc/nginx/vhost.d
+     depends_on:
+       - nginx
+     labels:
+       - "com.github.jrcs.letsencrypt_nginx_proxy_companion.docker_gen"
+
+   nginx-letsencrypt:
+     image: jrcs/letsencrypt-nginx-proxy-companion:stable
+     restart: always
+     volumes:
+       - certs:/etc/nginx/certs
+       - nginx_vhost.d:/etc/nginx/vhost.d
+       - nginx_html:/usr/share/nginx/html
+       - /var/run/docker.sock:/var/run/docker.sock:ro
+     depends_on:
+       - nginx
+       - nginx-gen
+
+   ghost:
+     image: ghost:1.24.7-alpine
+     restart: always
+     volumes:
+       - $HOME/data:/var/lib/ghost/content
+       - ./files/config.production.json:/var/lib/ghost/config.production.json
+     environment:
+       - VIRTUAL_HOST=onkardevops.com, www.onkardevops.com
+       - LETSENCRYPT_HOST=onkardevops.com, www.onkardevops.com
+       - LETSENCRYPT_EMAIL=mrshoker@hotmail.com
+
+volumes:
+  nginx_vhost.d:
+  nginx_conf.d:
+  nginx_html:
+  certs:
